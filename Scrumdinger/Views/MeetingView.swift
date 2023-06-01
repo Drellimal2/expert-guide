@@ -12,8 +12,13 @@ import AVFoundation
 struct MeetingView: View {
     @Binding var scrum : DailyScrum
     @StateObject var scrumTimer = ScrumTimer()
+    @StateObject var speechRecognizer = SpeechRecognizer()
+    @State var isRecording = false
+
     
     private var player: AVPlayer { AVPlayer.sharedDingPlayer }
+    
+    
     
     var body: some View {
         ZStack {
@@ -22,27 +27,43 @@ struct MeetingView: View {
             VStack {
                 MeetingHeaderView(secondsElapsed: scrumTimer.secondsElapsed, secondsRemaining: scrumTimer.secondsRemaining, theme: scrum.theme)
                 
-                Circle()
-                    .strokeBorder(lineWidth: 24)
+                MeetingTimerView(theme: scrum.theme, speakers: scrumTimer.speakers,isRecording : isRecording, secondsElapsed: scrumTimer.secondsElapsed, secondsRemaining: scrumTimer.secondsRemaining )
                 
                 MeetingFooterView(speakers: scrumTimer.speakers, skipAction: scrumTimer.skipSpeaker )
             }
         }
-        .foregroundColor(scrum.theme.accentColor)
         .padding()
+        .foregroundColor(scrum.theme.accentColor)
         .onAppear{
-            scrumTimer.reset(lengthInMinutes: scrum.lengthInMinutes, attendees: scrum.attendees)
-            scrumTimer.speakerChangedAction = {
-                player.seek(to: .zero)
-                player.play()
-            }
-            scrumTimer.startScrum()
+            startScrum()
         }
         .onDisappear {
-            scrumTimer.stopScrum()
+            stopScrum()
         }
         .navigationBarTitleDisplayMode(.inline)
     }
+    
+    
+    private func startScrum() {
+        scrumTimer.reset(lengthInMinutes: scrum.lengthInMinutes, attendees: scrum.attendees)
+        scrumTimer.speakerChangedAction = {
+            player.seek(to: .zero)
+            player.play()
+        }
+        speechRecognizer.resetTranscript()
+        speechRecognizer.startTranscribing()
+        isRecording = true
+        scrumTimer.startScrum()
+    }
+    
+    private func stopScrum() {
+        scrumTimer.stopScrum()
+        speechRecognizer.stopTranscribing()
+        isRecording = false
+        let newHistory = History(attendees: scrum.attendees, transcript: speechRecognizer.transcript)
+        scrum.history.insert(newHistory, at: 0)
+    }
+    
 }
 
 struct MeetingView_Previews: PreviewProvider {
